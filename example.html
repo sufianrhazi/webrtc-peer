@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en-US">
+    <head>
+        <meta charset="UTF-8">
+        <title>Example</title>
+        <style>
+fieldset.disabled {
+    color: #404040;
+    background-color: #DDDDDD;
+}
+fieldset .disabled-msg,
+fieldset .active-msg {
+    display: none;
+}
+fieldset.disabled .disabled-msg {
+    display: block;
+}
+fieldset.active {
+    background-color: #FFFFDD;
+}
+fieldset.active .active-msg {
+    display: block;
+}
+.columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+        </style>
+    </head>
+    <body>
+        <h1>Example Peer</h1>
+        <div class="columns">
+            <fieldset>
+                <legend>Start connection</legend>
+                <button id="start">Start a new connection</button>
+                <p>Note: it may take a while for this to finish gathering ICE candidates...</p>
+            </fieldset>
+            <fieldset>
+                <legend>Accept invitation</legend>
+                <p>
+                    <label>Invite message: <textarea rows="20" cols="60" id="inviteAccept" /></textarea>
+                    <button id="accept">Accept invitation</button>
+                </p>
+            </fieldset>
+        </div>
+        <hr />
+        <fieldset class="disabled" id="negotiation">
+            <legend>Connection negotiation</legend>
+            <p class="disabled-msg">Status: Negotiation not needed</p>
+            <p class="active-msg">Status: <strong>Negotiation needed</strong></p>
+            <ol>
+                <li>
+                    <label>Message to send: <textarea rows="20" cols="60" id="negotiationMessage" disabled readonly></textarea></label>
+                </li>
+                <li>
+                    <label>Response received: <textarea rows="20" cols="60" id="negotiationResponse" disabled></textarea></label>
+                    <button disabled id="negotiationProcess">Process response</button>
+                </li>
+            </ol>
+        </fieldset>
+        <hr />
+        <fieldset class="disabled" id="connection">
+            <legend>Connection</legend>
+            <p class="disabled-msg">Not connected</p>
+            <p class="active-msg"><strong>Connection established</strong></p>
+            <p>
+                <label>Message: <input type="text" id="sendMessage" disabled /></label>
+                <button id="send" disabled>Send message</button>
+            </p>
+            <p>Received messages:</p>
+            <ul id="messages"></ul>
+        </fieldset>
+        <script type="module">
+import { Peer } from './build/esm/Peer.js';
+
+const startButton = document.getElementById('start');
+const inviteAcceptInput = document.getElementById('inviteAccept');
+const acceptButton = document.getElementById('accept');
+const negotiationFieldset = document.getElementById('negotiation');
+const negotiationMessage = document.getElementById('negotiationMessage');
+const negotiationResponse = document.getElementById('negotiationResponse');
+const negotiationProcessButton = document.getElementById('negotiationProcess');
+
+const connectionFieldset = document.getElementById('connection');
+const sendMessage = document.getElementById('sendMessage');
+const sendButton = document.getElementById('send');
+const messagesUl = document.getElementById('messages');
+
+let respond = (msg) => {
+    throw new Error('Attempted to respond when not expecting response!');
+};
+
+function resetNegotiation() {
+    negotiationFieldset.className = 'disabled';
+    negotiationMessage.value = '';
+    negotiationMessage.disabled = true;
+    negotiationMessage.value = '';
+    negotiationResponse.disabled = true;
+    negotiationProcessButton.disabled = true;
+}
+
+const peer = new Peer((toSend) => {
+    // When called, we need to send toSend to the other side 
+    // and we need the response to be returned as a promise
+    negotiationFieldset.className = 'active';
+    negotiationMessage.value = toSend;
+    negotiationMessage.disabled = false;
+    negotiationMessage.focus();
+    negotiationMessage.select();
+    negotiationResponse.disabled = false;
+    negotiationProcessButton.disabled = false;
+    return new Promise((resolve) => {
+        respond = (msg) => {
+            resetNegotiation();
+            resolve(msg)
+        };
+    });
+});
+
+peer.onMessage((msgEvent) => {
+    const liEl = document.createElement('li'); 
+    liEl.textContent = msgEvent.data;
+    messagesUl.appendChild(liEl);
+});
+
+peer.connected().then(() => {
+    resetNegotiation();
+
+    connectionFieldset.className = 'active';
+    sendMessage.disabled = false;
+    sendButton.disabled = false;
+});
+
+startButton.addEventListener('click', () => {
+    peer.start();
+
+    startButton.disabled = true;
+    inviteAcceptInput.disabled = true;
+    acceptButton.disabled = true;
+});
+
+acceptButton.addEventListener('click', () => {
+    peer.accept(inviteAcceptInput.value);
+
+    startButton.disabled = true;
+    inviteAcceptInput.disabled = true;
+    acceptButton.disabled = true;
+});
+
+negotiationProcessButton.addEventListener('click', () => {
+    respond(negotiationResponse.value);
+});
+
+sendButton.addEventListener('click', () => {
+    peer.channel.send(sendMessage.value);
+    sendMessage.value = '';
+});
+        </script>
+</html>

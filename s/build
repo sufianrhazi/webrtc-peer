@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -e
+cd "$(dirname "$0")/.."
+# shellcheck disable=SC1091
+source "s/_tools.sh"
+
+echo_info "Checking requirements..."
+s/check_requirements
+
+echo_info "Installing dependencies..."
+npm install
+
+echo_info "Cleaning build"
+rm -rf build/
+
+echo_info "Building..."
+npm exec -- tsc --declaration --emitDeclarationOnly --outDir build/esm src/Peer.ts 
+npm exec -- esbuild --bundle src/Peer.ts --format=esm --outdir=build/esm
+npm exec -- esbuild --bundle src/Peer.ts --format=cjs --outdir=build/cjs
+npm exec -- esbuild --bundle src/Peer.ts --format=iife --global-name=WebRTCPeer --outdir=build/iife
