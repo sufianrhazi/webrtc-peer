@@ -132,7 +132,7 @@ peer.onConnected(() => {
     sendButton.disabled = false;
 });
 
-peer.onDisconected(() => {
+peer.onDisconnected(() => {
     resetNegotiation();
 
     connectionFieldset.className = 'disabled';
