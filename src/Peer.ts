@@ -157,6 +157,8 @@ function decodeNegotiateAnswer(encoded: string) {
 export class Peer {
     handler: (toSend: string) => Promise<string>;
     channel: RTCDataChannel | undefined;
+    onConnectedHandler: undefined | (() => void);
+    onDisconnectedHandler: undefined | (() => void);
     onMessageHandler: undefined | ((event: MessageEvent<any>) => void);
 
     peerConnection: RTCPeerConnection;
@@ -165,11 +167,6 @@ export class Peer {
     iceCandidatesPromise: {
         promise: Promise<RTCIceCandidate[]>;
         resolve: (candidates: RTCIceCandidate[]) => void;
-        reject: (error: any) => void;
-    };
-    connectedPromise: {
-        promise: Promise<void>;
-        resolve: () => void;
         reject: (error: any) => void;
     };
 
@@ -185,7 +182,6 @@ export class Peer {
         this.channel = undefined;
 
         this.iceCandidatesPromise = makePromise<RTCIceCandidate[]>();
-        this.connectedPromise = makePromise<void>();
 
         this.iceCandidates = [];
         this.peerConnection.addEventListener('connectionstatechange', (e) => {
@@ -194,9 +190,10 @@ export class Peer {
                 this.peerConnection.connectionState
             );
             if (this.peerConnection.connectionState === 'connected') {
-                this.connectedPromise.resolve();
-            } else if (this.peerConnection.connectionState === 'failed') {
-                this.connectedPromise.reject(new Error('Unable to connect'));
+                this.onConnectedHandler?.();
+            }
+            if (this.peerConnection.connectionState === 'disconnected') {
+                this.onDisconnectedHandler?.();
             }
         });
         this.peerConnection.addEventListener('icecandidate', (e) => {
@@ -233,7 +230,7 @@ export class Peer {
             async (event) => {
                 console.log('client negotiationneeded');
                 const offer = await this.peerConnection.createOffer();
-                this.peerConnection.setLocalDescription(
+                await this.peerConnection.setLocalDescription(
                     new RTCSessionDescription(offer)
                 );
 
@@ -244,20 +241,24 @@ export class Peer {
                             encodeNegotiateOffer(offer, iceCandidates)
                         )
                     );
-                this.peerConnection.setRemoteDescription(
+                await this.peerConnection.setRemoteDescription(
                     new RTCSessionDescription(answer)
                 );
 
                 for (const candidate of remoteCandidates) {
-                    this.peerConnection.addIceCandidate(candidate);
+                    await this.peerConnection.addIceCandidate(candidate);
                 }
-                this.peerConnection.addIceCandidate();
+                await this.peerConnection.addIceCandidate();
             }
         );
     }
 
-    connected(): Promise<void> {
-        return this.connectedPromise.promise;
+    onConnected(handler: () => void) {
+        this.onConnectedHandler = handler;
+    }
+
+    onDisconnected(handler: () => void) {
+        this.onDisconnectedHandler = handler;
     }
 
     onMessage(handler: (event: MessageEvent<any>) => void) {
@@ -265,18 +266,10 @@ export class Peer {
         this.onMessageHandler = handler;
     }
 
-    async start() {
+    start() {
         this.channel = this.peerConnection.createDataChannel('main');
         if (this.onMessageHandler) {
             this.channel.addEventListener('message', this.onMessageHandler);
-        }
-    }
-
-    async addMedia(constraints: MediaStreamConstraints) {
-        const localStream =
-            await navigator.mediaDevices.getUserMedia(constraints);
-        for (const track of localStream.getTracks()) {
-            this.peerConnection.addTrack(track, localStream);
         }
     }
 
@@ -291,9 +284,9 @@ export class Peer {
             new RTCSessionDescription(answer)
         );
         for (const candidate of remoteCandidates) {
-            this.peerConnection.addIceCandidate(candidate);
+            await this.peerConnection.addIceCandidate(candidate);
         }
-        this.peerConnection.addIceCandidate();
+        await this.peerConnection.addIceCandidate();
         const iceCandidates = await this.iceCandidatesPromise.promise;
 
         this.accept(

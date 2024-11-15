@@ -124,7 +124,6 @@ var Peer = class {
     this.peerConnection = new RTCPeerConnection(options);
     this.channel = void 0;
     this.iceCandidatesPromise = makePromise();
-    this.connectedPromise = makePromise();
     this.iceCandidates = [];
     this.peerConnection.addEventListener("connectionstatechange", (e) => {
       console.log(
@@ -132,9 +131,10 @@ var Peer = class {
         this.peerConnection.connectionState
       );
       if (this.peerConnection.connectionState === "connected") {
-        this.connectedPromise.resolve();
-      } else if (this.peerConnection.connectionState === "failed") {
-        this.connectedPromise.reject(new Error("Unable to connect"));
+        this.onConnectedHandler?.();
+      }
+      if (this.peerConnection.connectionState === "disconnected") {
+        this.onDisconnectedHandler?.();
       }
     });
     this.peerConnection.addEventListener("icecandidate", (e) => {
@@ -171,7 +171,7 @@ var Peer = class {
       async (event) => {
         console.log("client negotiationneeded");
         const offer = await this.peerConnection.createOffer();
-        this.peerConnection.setLocalDescription(
+        await this.peerConnection.setLocalDescription(
           new RTCSessionDescription(offer)
         );
         const iceCandidates = await this.iceCandidatesPromise.promise;
@@ -180,33 +180,30 @@ var Peer = class {
             encodeNegotiateOffer(offer, iceCandidates)
           )
         );
-        this.peerConnection.setRemoteDescription(
+        await this.peerConnection.setRemoteDescription(
           new RTCSessionDescription(answer)
         );
         for (const candidate of remoteCandidates) {
-          this.peerConnection.addIceCandidate(candidate);
+          await this.peerConnection.addIceCandidate(candidate);
         }
-        this.peerConnection.addIceCandidate();
+        await this.peerConnection.addIceCandidate();
       }
     );
   }
-  connected() {
-    return this.connectedPromise.promise;
+  onConnected(handler) {
+    this.onConnectedHandler = handler;
+  }
+  onDisconnected(handler) {
+    this.onDisconnectedHandler = handler;
   }
   onMessage(handler) {
     this.channel?.addEventListener("message", handler);
     this.onMessageHandler = handler;
   }
-  async start() {
+  start() {
     this.channel = this.peerConnection.createDataChannel("main");
     if (this.onMessageHandler) {
       this.channel.addEventListener("message", this.onMessageHandler);
-    }
-  }
-  async addMedia(constraints) {
-    const localStream = await navigator.mediaDevices.getUserMedia(constraints);
-    for (const track of localStream.getTracks()) {
-      this.peerConnection.addTrack(track, localStream);
     }
   }
   async accept(encodedOffer) {
@@ -219,9 +216,9 @@ var Peer = class {
       new RTCSessionDescription(answer)
     );
     for (const candidate of remoteCandidates) {
-      this.peerConnection.addIceCandidate(candidate);
+      await this.peerConnection.addIceCandidate(candidate);
     }
-    this.peerConnection.addIceCandidate();
+    await this.peerConnection.addIceCandidate();
     const iceCandidates = await this.iceCandidatesPromise.promise;
     this.accept(
       await this.handler(encodeNegotiateAnswer(answer, iceCandidates))

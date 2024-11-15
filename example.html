@@ -124,12 +124,20 @@ peer.onMessage((msgEvent) => {
     messagesUl.appendChild(liEl);
 });
 
-peer.connected().then(() => {
+peer.onConnected(() => {
     resetNegotiation();
 
     connectionFieldset.className = 'active';
     sendMessage.disabled = false;
     sendButton.disabled = false;
+});
+
+peer.onDisconected(() => {
+    resetNegotiation();
+
+    connectionFieldset.className = 'disabled';
+    sendMessage.disabled = true;
+    sendButton.disabled = true;
 });
 
 startButton.addEventListener('click', () => {
