@@ -68,7 +68,7 @@ fieldset.active .active-msg {
                 <label>Message: <input type="text" id="sendMessage" disabled /></label>
                 <button id="send" disabled>Send message</button>
             </p>
-            <p>Received messages:</p>
+            <p>Messages:</p>
             <ul id="messages"></ul>
         </fieldset>
         <script type="module">
@@ -120,7 +120,7 @@ const peer = new Peer((toSend) => {
 
 peer.onMessage((msgEvent) => {
     const liEl = document.createElement('li'); 
-    liEl.textContent = msgEvent.data;
+    liEl.textContent = 'recv: ' + msgEvent.data;
     messagesUl.appendChild(liEl);
 });
 
@@ -161,6 +161,9 @@ negotiationProcessButton.addEventListener('click', () => {
 });
 
 sendButton.addEventListener('click', () => {
+    const liEl = document.createElement('li');
+    liEl.textContent = 'send: ' + sendMessage.value;
+    messagesUl.appendChild(liEl);
     peer.channel.send(sendMessage.value);
     sendMessage.value = '';
 });
